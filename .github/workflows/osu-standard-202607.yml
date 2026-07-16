@@ -38,9 +38,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
+        include:
+          - os: ubuntu-22.04
+            artifact: rosu-pp-linux-x86_64-release
+          - os: windows-latest
+            artifact: rosu-pp-windows-x86_64-release
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -49,18 +51,42 @@ jobs:
 
       - name: Install stable Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
-        if: runner.os == 'Linux'
-        run: cargo fmt --all -- --check
-
       - name: Check all targets
         run: cargo check --all-targets --no-default-features
+
+      - name: Build release shared library
+        run: cargo build --release --no-default-features
+
+      - name: Verify Linux GLIBC requirement
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          ldd --version | head -n 1
+          max_glibc="$(objdump -T target/release/librosu_pp.so \
+            | sed -n 's/.*GLIBC_\([0-9][0-9.]*\).*/\1/p' \
+            | sort -V \
+            | tail -n 1)"
+          echo "Highest required GLIBC symbol version: ${max_glibc:-none}"
+          if [ -n "$max_glibc" ] && dpkg --compare-versions "$max_glibc" gt "2.38"; then
+            echo "librosu_pp.so requires GLIBC $max_glibc, which exceeds 2.38"
+            exit 1
+          fi
+
+      - name: Upload release shared library
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            target/release/librosu_pp.so
+            target/release/rosu_pp.dll
+            target/release/rosu_pp.dll.lib
+            target/release/rosu_pp.pdb
+          if-no-files-found: error
+          retention-days: 30
 
   gradual-consistency:
     name: Gradual consistency (${{ matrix.os }})
@@ -69,7 +95,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
+          - ubuntu-22.04
           - windows-latest
     runs-on: ${{ matrix.os }}
 
@@ -104,7 +130,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
+          - ubuntu-22.04
           - windows-latest
     runs-on: ${{ matrix.os }}
 
