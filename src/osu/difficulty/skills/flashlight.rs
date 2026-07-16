@@ -28,7 +28,7 @@ define_skill! {
         radius: f64,
         time_preempt: f64,
         time_fade_in: f64,
-        total_objects: usize,
+        total_objects: usize
     ) -> Self {
         let scaling_factor = 52.0 / radius;
 
