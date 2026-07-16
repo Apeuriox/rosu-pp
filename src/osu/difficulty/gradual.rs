@@ -143,11 +143,19 @@ fn new(difficulty: Difficulty, map: &Beatmap) -> OsuGradualDifficulty {
         &difficulty,
         &scaling_factor,
         osu_objects.iter_mut(),
+        time_preempt / difficulty.get_clock_rate(),
+        2.0 * map_attrs.hit_windows().od_great.unwrap_or(0.0),
     );
 
     let great_hit_window = map_attrs.hit_windows().od_great.unwrap_or(0.0);
 
-    let skills = OsuSkills::new(mods, &scaling_factor, great_hit_window, time_preempt);
+    let skills = OsuSkills::new(
+        mods,
+        &scaling_factor,
+        great_hit_window,
+        time_preempt,
+        map.hit_objects.len(),
+    );
     let diff_objects = extend_lifetime(diff_objects.into_boxed_slice());
 
     let score_simulator = GradualLegacyScoreSimulator::new(map, map_attrs);
@@ -203,6 +211,7 @@ impl Iterator for OsuGradualDifficulty {
             self.skills.aim.process(curr, &self.diff_objects);
             self.skills.aim_no_sliders.process(curr, &self.diff_objects);
             self.skills.speed.process(curr, &self.diff_objects);
+            self.skills.reading.process(curr, &self.diff_objects);
             self.skills.flashlight.process(curr, &self.diff_objects);
 
             Self::increment_combo(curr.base, &mut self.attrs);

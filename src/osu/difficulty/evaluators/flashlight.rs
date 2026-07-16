@@ -32,7 +32,8 @@ impl FlashlightEvaluator {
         &self,
         curr: &'a OsuDifficultyObject<'a>,
         diff_objects: &'a [OsuDifficultyObject<'a>],
-        hidden: bool,
+        hidden_objects: bool,
+        has_hidden: bool,
     ) -> f64 {
         if curr.base.is_spinner() {
             return 0.0;
@@ -79,7 +80,7 @@ impl FlashlightEvaluator {
                         * (1.0
                             - osu_curr.opacity_at(
                                 curr_hit_obj.start_time,
-                                hidden,
+                                hidden_objects,
                                 self.time_preempt,
                                 self.time_fade_in,
                             ));
@@ -101,7 +102,7 @@ impl FlashlightEvaluator {
         result = (small_dist_nerf * result).powf(2.0);
 
         // * Additional bonus for Hidden due to there being no approach circles.
-        if hidden {
+        if has_hidden {
             result *= 1.0 + Self::HIDDEN_BONUS;
         }
 

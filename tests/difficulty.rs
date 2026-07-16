@@ -83,6 +83,7 @@ macro_rules! test_cases {
             n_spinners: $n_spinners,
             stars: $stars,
             max_combo: $max_combo,
+            ..Default::default()
         }
     };
     ( @Taiko {
@@ -601,6 +602,7 @@ impl AssertEq for OsuDifficultyAttributes {
             n_spinners,
             stars,
             max_combo,
+            ..
         } = self;
 
         assert_eq_float(*aim, expected.aim);

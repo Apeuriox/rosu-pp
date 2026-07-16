@@ -11,6 +11,8 @@ pub struct OsuDifficultyAttributes {
     pub speed: f64,
     /// The difficulty of the flashlight skill.
     pub flashlight: f64,
+    /// The difficulty of the reading skill.
+    pub reading: f64,
     /// The ratio of the aim strain with and without considering sliders
     pub slider_factor: f64,
     /// Describes how much of aim's difficult strain count is contributed to by sliders
@@ -23,6 +25,8 @@ pub struct OsuDifficultyAttributes {
     pub aim_difficult_strain_count: f64,
     /// Weighted sum of speed strains.
     pub speed_difficult_strain_count: f64,
+    /// The number of reading-intensive objects weighted by difficulty.
+    pub reading_difficult_note_count: f64,
     /// The amount of nested score per object.
     pub nested_score_per_object: f64,
     /// The legacy score base multiplier.
@@ -95,6 +99,8 @@ pub struct OsuPerformanceAttributes {
     pub pp_aim: f64,
     /// The flashlight portion of the final pp.
     pub pp_flashlight: f64,
+    /// The reading portion of the final pp.
+    pub pp_reading: f64,
     /// The speed portion of the final pp.
     pub pp_speed: f64,
     /// Misses including an approximated amount of slider breaks

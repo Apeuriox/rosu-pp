@@ -1,228 +1,350 @@
 use crate::{
     any::difficulty::object::IDifficultyObject,
     osu::difficulty::object::OsuDifficultyObject,
-    util::{
-        difficulty::{milliseconds_to_bpm, reverse_lerp, smootherstep, smoothstep},
-        float_ext::FloatExt,
+    util::difficulty::{
+        milliseconds_to_bpm, reverse_lerp, smootherstep, smoothstep,
     },
 };
 
-pub struct AimEvaluator;
+pub struct SnapAimEvaluator;
 
-impl AimEvaluator {
-    const WIDE_ANGLE_MULTIPLIER: f64 = 1.5;
-    const ACUTE_ANGLE_MULTIPLIER: f64 = 2.55;
-    const SLIDER_MULTIPLIER: f64 = 1.35;
-    const VELOCITY_CHANGE_MULTIPLIER: f64 = 0.75;
+impl SnapAimEvaluator {
+    const WIDE_ANGLE_MULTIPLIER: f64 = 9.67;
+    const ACUTE_ANGLE_MULTIPLIER: f64 = 2.41;
+    const SLIDER_MULTIPLIER: f64 = 1.5;
+    const VELOCITY_CHANGE_MULTIPLIER: f64 = 0.9;
     const WIGGLE_MULTIPLIER: f64 = 1.02;
 
     #[expect(clippy::too_many_lines, reason = "staying in-sync with lazer")]
     pub fn evaluate_diff_of<'a>(
         curr: &'a OsuDifficultyObject<'a>,
-        diff_objects: &'a [OsuDifficultyObject<'a>],
+        objects: &'a [OsuDifficultyObject<'a>],
         with_slider_travel_dist: bool,
     ) -> f64 {
-        let osu_curr_obj = curr;
+        if curr.base.is_spinner() || curr.idx <= 1 {
+            return 0.0;
+        }
 
-        let Some((osu_last_last_obj, osu_last_obj)) = curr
-            .previous(1, diff_objects)
-            .zip(curr.previous(0, diff_objects))
-            .filter(|(_, last)| !(curr.base.is_spinner() || last.base.is_spinner()))
-        else {
+        let Some(last) = curr.previous(0, objects) else {
             return 0.0;
         };
 
-        #[expect(clippy::items_after_statements, reason = "staying in-sync with lazer")]
-        const RADIUS: i32 = OsuDifficultyObject::NORMALIZED_RADIUS;
-        #[expect(clippy::items_after_statements, reason = "staying in-sync with lazer")]
-        const DIAMETER: i32 = OsuDifficultyObject::NORMALIZED_DIAMETER;
-
-        // * Calculate the velocity to the current hitobject, which starts
-        // * with a base distance / time assuming the last object is a hitcircle.
-        let mut curr_vel = osu_curr_obj.lazy_jump_dist / osu_curr_obj.adjusted_delta_time;
-
-        // * But if the last object is a slider, then we extend the travel
-        // * velocity through the slider into the current object.
-        if osu_last_obj.base.is_slider() && with_slider_travel_dist {
-            // * calculate the slider velocity from slider head to slider end.
-            let travel_vel = osu_last_obj.travel_dist / osu_last_obj.travel_time;
-            // * calculate the movement velocity from slider end to current object
-            let movement_vel = osu_curr_obj.min_jump_dist / osu_curr_obj.min_jump_time;
-
-            // * take the larger total combined velocity.
-            curr_vel = curr_vel.max(movement_vel + travel_vel);
+        if last.base.is_spinner() {
+            return 0.0;
         }
 
-        // * As above, do the same for the previous hitobject.
-        let mut prev_vel = osu_last_obj.lazy_jump_dist / osu_last_obj.adjusted_delta_time;
+        let last2 = curr.previous(2, objects);
+        let radius = f64::from(OsuDifficultyObject::NORMALIZED_RADIUS);
+        let diameter = f64::from(OsuDifficultyObject::NORMALIZED_DIAMETER);
 
-        if osu_last_last_obj.base.is_slider() && with_slider_travel_dist {
-            let travel_vel = osu_last_last_obj.travel_dist / osu_last_last_obj.travel_time;
-            let movement_vel = osu_last_obj.min_jump_dist / osu_last_obj.min_jump_time;
+        let curr_dist = if with_slider_travel_dist {
+            curr.lazy_jump_dist
+        } else {
+            curr.jump_dist
+        };
+        let mut curr_vel = curr_dist / curr.adjusted_delta_time;
 
-            prev_vel = prev_vel.max(movement_vel + travel_vel);
+        if last.base.is_slider() && with_slider_travel_dist {
+            let slider_dist = last.lazy_travel_dist + curr.lazy_jump_dist;
+            curr_vel = curr_vel.max(slider_dist / curr.adjusted_delta_time);
         }
 
-        let mut wide_angle_bonus = 0.0;
-        let mut acute_angle_bonus = 0.0;
-        let mut slider_bonus = 0.0;
-        let mut vel_change_bonus = 0.0;
-        let mut wiggle_bonus = 0.0;
+        let prev_dist = if with_slider_travel_dist {
+            last.lazy_jump_dist
+        } else {
+            last.jump_dist
+        };
+        let mut prev_vel = prev_dist / last.adjusted_delta_time;
+        let mut difficulty = curr_vel * Self::vector_angle_repetition(curr, last, objects);
 
-        // * Start strain with regular velocity.
-        let mut aim_strain = curr_vel;
+        if let Some((curr_angle, last_angle)) = curr.angle.zip(last.angle) {
+            let vel_influence = curr_vel.min(prev_vel);
+            let mut acute_bonus = 0.0;
 
-        if let Some((curr_angle, last_angle)) = osu_curr_obj.angle.zip(osu_last_obj.angle) {
-            // * Rewarding angles, take the smaller velocity as base.
-            let angle_bonus = curr_vel.min(prev_vel);
-
-            // * If rhythms are the same.
-            if osu_curr_obj
-                .adjusted_delta_time
-                .max(osu_last_obj.adjusted_delta_time)
-                < 1.25
-                    * osu_curr_obj
-                        .adjusted_delta_time
-                        .min(osu_last_obj.adjusted_delta_time)
+            if curr.adjusted_delta_time.max(last.adjusted_delta_time)
+                < 1.25 * curr.adjusted_delta_time.min(last.adjusted_delta_time)
             {
-                acute_angle_bonus = Self::calc_acute_angle_bonus(curr_angle);
-
-                // * Penalize angle repetition.
-                acute_angle_bonus *= 0.08
+                acute_bonus = Self::calc_angle_acuteness(curr_angle);
+                acute_bonus *= 0.08
                     + 0.92
                         * (1.0
-                            - f64::min(
-                                acute_angle_bonus,
-                                f64::powf(Self::calc_acute_angle_bonus(last_angle), 3.0),
-                            ));
-
-                // * Apply acute angle bonus for BPM above 300 1/2 and distance more than one diameter
-                acute_angle_bonus *= angle_bonus
+                            - acute_bonus
+                                .min(Self::calc_angle_acuteness(last_angle).powi(3)));
+                acute_bonus *= vel_influence
                     * smootherstep(
-                        milliseconds_to_bpm(osu_curr_obj.adjusted_delta_time, Some(2)),
+                        milliseconds_to_bpm(curr.adjusted_delta_time, Some(2)),
                         300.0,
                         400.0,
                     )
-                    * smootherstep(
-                        osu_curr_obj.lazy_jump_dist,
-                        f64::from(DIAMETER),
-                        f64::from(DIAMETER * 2),
-                    );
+                    * smootherstep(curr_dist, 0.0, diameter * 2.0);
             }
 
-            wide_angle_bonus = Self::calc_wide_angle_bonus(curr_angle);
+            let mut wide_bonus = Self::calc_angle_wideness(curr_angle);
+            wide_bonus *= 0.25
+                + 0.75
+                    * (1.0
+                        - wide_bonus.min(Self::calc_angle_wideness(last_angle).powi(3)));
 
-            // * Penalize angle repetition.
-            wide_angle_bonus *= 1.0
-                - f64::min(
-                    wide_angle_bonus,
-                    f64::powf(Self::calc_wide_angle_bonus(last_angle), 3.0),
-                );
+            const WIDE_ANGLE_TIME_SCALE: f64 = 1.45;
+            let mut wide_curr_vel = curr_dist / curr.adjusted_delta_time.powf(WIDE_ANGLE_TIME_SCALE);
+            let wide_prev_vel = prev_dist / last.adjusted_delta_time.powf(WIDE_ANGLE_TIME_SCALE);
 
-            // * Apply full wide angle bonus for distance more than one diameter
-            wide_angle_bonus *=
-                angle_bonus * smootherstep(osu_curr_obj.lazy_jump_dist, 0.0, f64::from(DIAMETER));
+            if last.base.is_slider() && with_slider_travel_dist {
+                let slider_dist = last.lazy_travel_dist + curr.lazy_jump_dist;
+                wide_curr_vel = wide_curr_vel
+                    .max(slider_dist / curr.adjusted_delta_time.powf(WIDE_ANGLE_TIME_SCALE));
+            }
 
-            // * Apply wiggle bonus for jumps that are [radius, 3*diameter] in distance, with < 110 angle
-            // * https://www.desmos.com/calculator/dp0v0nvowc
-            wiggle_bonus = angle_bonus
-                * smootherstep(
-                    osu_curr_obj.lazy_jump_dist,
-                    f64::from(RADIUS),
-                    f64::from(DIAMETER),
-                )
-                * f64::powf(
-                    reverse_lerp(
-                        osu_curr_obj.lazy_jump_dist,
-                        f64::from(DIAMETER * 3),
-                        f64::from(DIAMETER),
-                    ),
-                    1.8,
-                )
-                * smootherstep(curr_angle, f64::to_radians(110.0), f64::to_radians(60.0))
-                * smootherstep(
-                    osu_last_obj.lazy_jump_dist,
-                    f64::from(RADIUS),
-                    f64::from(DIAMETER),
-                )
-                * f64::powf(
-                    reverse_lerp(
-                        osu_last_obj.lazy_jump_dist,
-                        f64::from(DIAMETER * 3),
-                        f64::from(DIAMETER),
-                    ),
-                    1.8,
-                )
-                * smootherstep(last_angle, f64::to_radians(110.0), f64::to_radians(60.0));
+            wide_bonus *= wide_curr_vel.min(wide_prev_vel);
 
-            if let Some(osu_last_2_obj) = curr.previous(2, diff_objects) {
-                let distance =
-                    (osu_last_2_obj.base.stacked_pos() - osu_last_obj.base.stacked_pos()).length();
+            if let Some(last2) = last2 {
+                let dist = (last2.base.stacked_pos() - last.base.stacked_pos()).length();
 
-                if distance < 1.0 {
-                    wide_angle_bonus *= 1.0 - 0.35 * f64::from(1.0 - distance);
+                if dist < 1.0 {
+                    wide_bonus *= 1.0 - 0.55 * f64::from(1.0 - dist);
                 }
             }
+
+            difficulty += (acute_bonus * Self::ACUTE_ANGLE_MULTIPLIER)
+                .max(wide_bonus * Self::WIDE_ANGLE_MULTIPLIER);
+
+            let wiggle_bonus = vel_influence
+                * smootherstep(curr_dist, radius, diameter)
+                * reverse_lerp(curr_dist, diameter * 3.0, diameter).powf(1.8)
+                * smootherstep(curr_angle, 110_f64.to_radians(), 60_f64.to_radians())
+                * smootherstep(prev_dist, radius, diameter)
+                * reverse_lerp(prev_dist, diameter * 3.0, diameter).powf(1.8)
+                * smootherstep(last_angle, 110_f64.to_radians(), 60_f64.to_radians());
+
+            difficulty += wiggle_bonus * Self::WIGGLE_MULTIPLIER;
         }
 
-        if prev_vel.max(curr_vel).not_eq(0.0) {
-            // * We want to use the average velocity over the whole object when awarding
-            // * differences, not the individual jump and slider path velocities.
-            prev_vel = (osu_last_obj.lazy_jump_dist + osu_last_last_obj.travel_dist)
-                / osu_last_obj.adjusted_delta_time;
-            curr_vel = (osu_curr_obj.lazy_jump_dist + osu_last_obj.travel_dist)
-                / osu_curr_obj.adjusted_delta_time;
+        if prev_vel.max(curr_vel) != 0.0 {
+            if with_slider_travel_dist {
+                curr_vel = curr_dist / curr.adjusted_delta_time;
+            }
 
-            // * Scale with ratio of difference compared to 0.5 * max dist.
             let dist_ratio = smoothstep(
                 (prev_vel - curr_vel).abs() / prev_vel.max(curr_vel),
                 0.0,
                 1.0,
             );
-
-            // * Reward for % distance up to 125 / strainTime for overlaps where velocity is still changing.
-            let overlap_vel_buff = (f64::from(DIAMETER) * 1.25
-                / osu_curr_obj
-                    .adjusted_delta_time
-                    .min(osu_last_obj.adjusted_delta_time))
+            let overlap_vel_buff = (diameter * 1.25
+                / curr.adjusted_delta_time.min(last.adjusted_delta_time))
             .min((prev_vel - curr_vel).abs());
-
-            vel_change_bonus = overlap_vel_buff * dist_ratio;
-
-            // * Penalize for rhythm changes.
-            let bonus_base = (osu_curr_obj.adjusted_delta_time)
-                .min(osu_last_obj.adjusted_delta_time)
-                / (osu_curr_obj.adjusted_delta_time).max(osu_last_obj.adjusted_delta_time);
-            vel_change_bonus *= bonus_base.powf(2.0);
+            let mut vel_change_bonus = overlap_vel_buff * dist_ratio;
+            vel_change_bonus *= (curr.adjusted_delta_time.min(last.adjusted_delta_time)
+                / curr.adjusted_delta_time.max(last.adjusted_delta_time))
+            .powi(2);
+            difficulty += vel_change_bonus * Self::VELOCITY_CHANGE_MULTIPLIER;
         }
 
-        if osu_last_obj.base.is_slider() {
-            // * Reward sliders based on velocity.
-            slider_bonus = osu_last_obj.travel_dist / osu_last_obj.travel_time;
+        if curr.base.is_slider() && with_slider_travel_dist {
+            let slider_bonus = curr.travel_dist / curr.travel_time;
+            difficulty += if slider_bonus < 1.0 {
+                slider_bonus
+            } else {
+                slider_bonus.powf(0.75)
+            } * Self::SLIDER_MULTIPLIER;
         }
 
-        aim_strain += wiggle_bonus * Self::WIGGLE_MULTIPLIER;
-        aim_strain += vel_change_bonus * Self::VELOCITY_CHANGE_MULTIPLIER;
+        difficulty *= curr.small_circle_bonus;
+        difficulty *= Self::high_bpm_bonus(curr.adjusted_delta_time);
 
-        // * Add in acute angle bonus or wide angle bonus, whichever is larger.
-        aim_strain += (acute_angle_bonus * Self::ACUTE_ANGLE_MULTIPLIER)
-            .max(wide_angle_bonus * Self::WIDE_ANGLE_MULTIPLIER);
-
-        aim_strain *= osu_curr_obj.small_circle_bonus;
-
-        // * Add in additional slider velocity bonus.
-        if with_slider_travel_dist {
-            aim_strain += slider_bonus * Self::SLIDER_MULTIPLIER;
-        }
-
-        aim_strain
+        difficulty
     }
 
-    const fn calc_wide_angle_bonus(angle: f64) -> f64 {
-        smoothstep(angle, f64::to_radians(40.0), f64::to_radians(140.0))
+    fn high_bpm_bonus(ms: f64) -> f64 {
+        (1.0 - 0.03_f64.powf((ms / 1000.0).powf(0.65))).recip()
     }
 
-    const fn calc_acute_angle_bonus(angle: f64) -> f64 {
-        smoothstep(angle, f64::to_radians(140.0), f64::to_radians(40.0))
+    fn vector_angle_repetition(
+        curr: &OsuDifficultyObject<'_>,
+        last: &OsuDifficultyObject<'_>,
+        objects: &[OsuDifficultyObject<'_>],
+    ) -> f64 {
+        let Some((curr_angle, last_angle)) = curr.angle.zip(last.angle) else {
+            return 1.0;
+        };
+
+        let mut constant_angle_count = 0.0;
+
+        for idx in 0..6 {
+            let Some(prev) = curr.previous(idx, objects) else {
+                break;
+            };
+
+            if curr.adjusted_delta_time.max(prev.adjusted_delta_time)
+                > 1.1 * curr.adjusted_delta_time.min(prev.adjusted_delta_time)
+            {
+                break;
+            }
+
+            if let Some((prev_vector, curr_vector)) = prev
+                .normalised_vector_angle
+                .zip(curr.normalised_vector_angle)
+            {
+                let angle_diff = (curr_vector - prev_vector).abs();
+                constant_angle_count +=
+                    (8.0 * 11.25_f64.to_radians().min(angle_diff)).cos();
+            }
+        }
+
+        let vector_repetition = (0.5 / constant_angle_count).min(1.0).powi(2);
+        let stack_factor = smootherstep(
+            curr.lazy_jump_dist,
+            0.0,
+            f64::from(OsuDifficultyObject::NORMALIZED_DIAMETER),
+        );
+        let angle_diff_adjusted =
+            (2.0 * 45_f64.to_radians().min((curr_angle - last_angle).abs() * stack_factor))
+                .cos();
+        let base_nerf =
+            1.0 - 0.15 * Self::calc_angle_acuteness(last_angle) * angle_diff_adjusted;
+
+        (base_nerf + (1.0 - base_nerf) * vector_repetition * 0.5 * stack_factor).powi(2)
+    }
+
+    const fn calc_angle_wideness(angle: f64) -> f64 {
+        smoothstep(angle, 40_f64.to_radians(), 140_f64.to_radians())
+    }
+
+    pub const fn calc_angle_acuteness(angle: f64) -> f64 {
+        smoothstep(angle, 140_f64.to_radians(), 40_f64.to_radians())
+    }
+}
+
+pub struct AgilityEvaluator;
+
+impl AgilityEvaluator {
+    pub fn evaluate_diff_of(
+        curr: &OsuDifficultyObject<'_>,
+        objects: &[OsuDifficultyObject<'_>],
+    ) -> f64 {
+        if curr.base.is_spinner() {
+            return 0.0;
+        }
+
+        let travel_dist = curr
+            .previous(0, objects)
+            .map_or(0.0, |prev| prev.lazy_travel_dist);
+        let dist_cap = f64::from(OsuDifficultyObject::NORMALIZED_DIAMETER) * 1.2;
+        let dist_scaled = (travel_dist + curr.lazy_jump_dist).min(dist_cap) / dist_cap;
+        let mut difficulty = dist_scaled * 1000.0 / curr.adjusted_delta_time;
+        difficulty *= curr.small_circle_bonus.powf(1.5);
+        difficulty *= (1.0 - 0.2_f64.powf(curr.adjusted_delta_time / 1000.0)).recip();
+
+        difficulty
+    }
+}
+
+pub struct FlowAimEvaluator;
+
+impl FlowAimEvaluator {
+    pub fn evaluate_diff_of<'a>(
+        curr: &'a OsuDifficultyObject<'a>,
+        objects: &'a [OsuDifficultyObject<'a>],
+        with_slider_travel_dist: bool,
+    ) -> f64 {
+        if curr.base.is_spinner() || curr.idx <= 1 {
+            return 0.0;
+        }
+
+        let Some(last) = curr.previous(0, objects) else {
+            return 0.0;
+        };
+
+        if last.base.is_spinner() {
+            return 0.0;
+        }
+
+        let Some(last_last) = curr.previous(1, objects) else {
+            return 0.0;
+        };
+
+        let curr_dist = if with_slider_travel_dist {
+            curr.lazy_jump_dist
+        } else {
+            curr.jump_dist
+        };
+        let prev_dist = if with_slider_travel_dist {
+            last.lazy_jump_dist
+        } else {
+            last.jump_dist
+        };
+        let mut curr_vel = curr_dist / curr.adjusted_delta_time;
+
+        if last.base.is_slider() && with_slider_travel_dist {
+            let slider_dist = last.lazy_travel_dist + curr.lazy_jump_dist;
+            curr_vel = curr_vel.max(slider_dist / curr.adjusted_delta_time);
+        }
+
+        let prev_vel = prev_dist / last.adjusted_delta_time;
+        let mut difficulty = curr_vel * curr.small_circle_bonus.sqrt();
+        difficulty *= 1.0
+            + 0.25_f64.min(
+                ((curr.adjusted_delta_time.max(last.adjusted_delta_time)
+                    - curr.adjusted_delta_time.min(last.adjusted_delta_time))
+                    / 50.0)
+                    .powi(4),
+            );
+
+        let overlap_weight = if curr.idx > 2 {
+            1.0 - Self::overlap_factor(curr, last)
+                * Self::overlap_factor(curr, last_last)
+                * Self::overlap_factor(last, last_last)
+        } else {
+            1.0
+        };
+
+        if let Some((curr_angle, last_angle)) = curr.angle.zip(last.angle) {
+            let angle_diff = (curr_angle - last_angle).abs();
+            let angular_vel = (angle_diff / 2.0).sin() * 180.0
+                / (curr.adjusted_delta_time * 0.1);
+            difficulty *= 0.8 + (angular_vel / 270.0).sqrt();
+        }
+
+        if let Some(curr_angle) = curr.angle {
+            difficulty += curr_vel
+                * SnapAimEvaluator::calc_angle_acuteness(curr_angle)
+                * overlap_weight;
+        }
+
+        if prev_vel.max(curr_vel) != 0.0 {
+            if with_slider_travel_dist {
+                curr_vel = curr_dist / curr.adjusted_delta_time;
+            }
+
+            let dist_ratio = smoothstep(
+                (prev_vel - curr_vel).abs() / prev_vel.max(curr_vel),
+                0.0,
+                1.0,
+            );
+            let overlap_vel_buff =
+                (f64::from(OsuDifficultyObject::NORMALIZED_DIAMETER) * 1.25
+                    / curr.adjusted_delta_time.min(last.adjusted_delta_time))
+                .min((prev_vel - curr_vel).abs());
+            difficulty += overlap_vel_buff * dist_ratio * overlap_weight * 0.52;
+        }
+
+        if curr.base.is_slider() && with_slider_travel_dist {
+            difficulty += curr.travel_dist / curr.travel_time;
+        }
+
+        difficulty = difficulty.powf(1.45);
+
+        difficulty
+            * smootherstep(
+                curr_dist,
+                0.0,
+                f64::from(OsuDifficultyObject::NORMALIZED_RADIUS),
+            )
+    }
+
+    fn overlap_factor(first: &OsuDifficultyObject<'_>, second: &OsuDifficultyObject<'_>) -> f64 {
+        let radius = first.radius;
+        let dist = (first.base.stacked_pos() - second.base.stacked_pos()).length();
+
+        (1.0 - ((f64::from(dist) - radius).max(0.0) / radius).powi(2)).clamp(0.0, 1.0)
     }
 }
