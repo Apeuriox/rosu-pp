@@ -5,8 +5,7 @@ use crate::{
     osu::{
         OsuDifficultyAttributes, OsuPerformanceAttributes, OsuScoreState,
         difficulty::{
-            PERFORMANCE_NORM_EXPONENT, skills::flashlight::Flashlight,
-            sum_cognition_difficulty,
+            PERFORMANCE_NORM_EXPONENT, skills::flashlight::Flashlight, sum_cognition_difficulty,
         },
         legacy_score_miss_calc::OsuLegacyScoreMissCalculator,
     },
@@ -17,8 +16,7 @@ use crate::{
 };
 
 /// Multiplier applied to the combined osu!standard performance value.
-pub const PERFORMANCE_BASE_MULTIPLIER: f64 =
-    crate::osu::difficulty::PERFORMANCE_BASE_MULTIPLIER;
+pub const PERFORMANCE_BASE_MULTIPLIER: f64 = crate::osu::difficulty::PERFORMANCE_BASE_MULTIPLIER;
 
 pub(super) struct OsuPerformanceCalculator<'mods> {
     attrs: OsuDifficultyAttributes,
@@ -66,17 +64,16 @@ impl OsuPerformanceCalculator<'_> {
         let combo_based_estimated_miss_count = self.calculate_combo_based_estimated_miss_count();
         let mut score_based_estimated_miss_count = None;
 
-        let mut effective_miss_count = if using_classic_slider_acc
-            && !mods.sv2()
-            && state.legacy_total_score.is_some()
-        {
-            let legacy_score_miss_calc = OsuLegacyScoreMissCalculator::new(state, acc, mods, attrs);
+        let mut effective_miss_count =
+            if using_classic_slider_acc && !mods.sv2() && state.legacy_total_score.is_some() {
+                let legacy_score_miss_calc =
+                    OsuLegacyScoreMissCalculator::new(state, acc, mods, attrs);
 
-            *score_based_estimated_miss_count.insert(legacy_score_miss_calc.calculate())
-        } else {
-            // * Use combo-based miss count if this isn't a legacy score
-            combo_based_estimated_miss_count
-        };
+                *score_based_estimated_miss_count.insert(legacy_score_miss_calc.calculate())
+            } else {
+                // * Use combo-based miss count if this isn't a legacy score
+                combo_based_estimated_miss_count
+            };
 
         effective_miss_count = effective_miss_count.max(f64::from(state.hitresults.misses));
         effective_miss_count = effective_miss_count.min(f64::from(state.hitresults.total_hits()));
@@ -405,9 +402,9 @@ impl OsuPerformanceCalculator<'_> {
         if *using_classic_slider_acc {
             let likely_missed_sliderend_portion =
                 0.04 + 0.06 * attrs.aim_top_weighted_slider_factor.min(1.0).powi(2);
-            let estimated_dropped_ends =
-                (4.0 + likely_missed_sliderend_portion * f64::from(attrs.n_sliders))
-                    .min(f64::from(attrs.n_sliders));
+            let estimated_dropped_ends = (4.0
+                + likely_missed_sliderend_portion * f64::from(attrs.n_sliders))
+            .min(f64::from(attrs.n_sliders));
             let full_combo_threshold = f64::from(attrs.max_combo) - estimated_dropped_ends;
 
             if f64::from(state.max_combo) < full_combo_threshold {
@@ -466,13 +463,13 @@ impl OsuPerformanceCalculator<'_> {
         }
 
         let missed_combo_percent = 1.0 - f64::from(state.max_combo) / f64::from(attrs.max_combo);
-        let mut estimated_slider_breaks = (effective_miss_count * top_weighted_slider_factor)
-            .min(f64::from(non_miss_mistakes));
+        let mut estimated_slider_breaks =
+            (effective_miss_count * top_weighted_slider_factor).min(f64::from(non_miss_mistakes));
 
         // * Scores with more Oks are more likely to have slider breaks.
-        let non_miss_mistake_adjustment =
-            (f64::from(non_miss_mistakes) - estimated_slider_breaks + 4.5)
-                / (f64::from(non_miss_mistakes) + 4.0);
+        let non_miss_mistake_adjustment = (f64::from(non_miss_mistakes) - estimated_slider_breaks
+            + 4.5)
+            / (f64::from(non_miss_mistakes) + 4.0);
 
         // * There is a low probability of extra slider breaks on effective miss counts close to 1, as score based calculations are good at indicating if only a single break occurred.
         estimated_slider_breaks *= smoothstep(effective_miss_count, 1.0, 2.0);
@@ -612,8 +609,7 @@ impl OsuPerformanceCalculator<'_> {
         let high_ar_slider_visibility = 0.5 + slider_factor.powi(6) / 2.0;
         let low_ar_slider_visibility = slider_factor.powi(6);
         let ar = self.attrs.ar;
-        let mut bonus = 0.0275
-            + 0.025 * (12.0 - ar.max(7.0)) * high_ar_slider_visibility;
+        let mut bonus = 0.0275 + 0.025 * (12.0 - ar.max(7.0)) * high_ar_slider_visibility;
 
         if ar < 7.0 {
             bonus += 0.025 * (7.0 - ar.max(0.0)) * low_ar_slider_visibility;

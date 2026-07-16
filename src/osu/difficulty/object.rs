@@ -158,8 +158,8 @@ impl<'a> OsuDifficultyObject<'a> {
         scaling_factor: &ScalingFactor,
     ) {
         if let OsuObjectKind::Slider(ref slider) = self.base.kind {
-            self.travel_dist = self.lazy_travel_dist
-                * (slider.repeat_count() as f64).powf(0.3).max(1.0);
+            self.travel_dist =
+                self.lazy_travel_dist * (slider.repeat_count() as f64).powf(0.3).max(1.0);
 
             self.travel_time =
                 (self.lazy_travel_time / clock_rate).max(OsuDifficultyObject::MIN_DELTA_TIME);
@@ -223,11 +223,8 @@ impl<'a> OsuDifficultyObject<'a> {
             }
 
             let last_last_cursor_pos = Self::get_end_cursor_pos(last_last_diff_obj);
-            let movement_angle = Self::calculate_angle(
-                self.base.stacked_pos(),
-                angle_center,
-                last_last_cursor_pos,
-            );
+            let movement_angle =
+                Self::calculate_angle(self.base.stacked_pos(), angle_center, last_last_cursor_pos);
             let slider_angle = Self::calculate_slider_angle(
                 self.base.stacked_pos(),
                 last_diff_obj,
@@ -248,9 +245,9 @@ impl<'a> OsuDifficultyObject<'a> {
 
         let fade_in_start = self.start_time - self.preempt;
         let raw_preempt = self.preempt * self.clock_rate;
-        let fade_in_duration =
-            400.0 * (raw_preempt / crate::osu::object::OsuObject::PREEMPT_MIN).min(1.0)
-                / self.clock_rate;
+        let fade_in_duration = 400.0
+            * (raw_preempt / crate::osu::object::OsuObject::PREEMPT_MIN).min(1.0)
+            / self.clock_rate;
 
         if hidden {
             let hidden_fade_in_duration = if self.base.is_slider() {
@@ -278,12 +275,19 @@ impl<'a> OsuDifficultyObject<'a> {
 
         if last_diff_obj.travel_dist > 0.0 {
             if let OsuObjectKind::Slider(slider) = &last_diff_obj.base.kind {
-                last_last_cursor_pos = slider
-                    .nested_objects
-                    .get(slider.nested_objects.len().saturating_sub(2))
-                    .map_or(last_diff_obj.base.stacked_pos(), |nested| {
-                        nested.pos + last_diff_obj.base.stack_offset
-                    });
+                // rosu's nested objects exclude slider heads, unlike lazer's NestedHitObjects.
+                last_last_cursor_pos = if let Some(second_last_nested_idx) =
+                    slider.nested_objects.len().checked_sub(2)
+                {
+                    slider
+                        .nested_objects
+                        .get(second_last_nested_idx)
+                        .map_or(last_diff_obj.base.stacked_pos(), |nested| {
+                            nested.pos + last_diff_obj.base.stack_offset
+                        })
+                } else {
+                    last_diff_obj.base.stacked_pos()
+                };
             }
         }
 

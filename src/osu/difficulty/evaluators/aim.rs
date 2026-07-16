@@ -1,9 +1,7 @@
 use crate::{
     any::difficulty::object::IDifficultyObject,
     osu::difficulty::object::OsuDifficultyObject,
-    util::difficulty::{
-        milliseconds_to_bpm, reverse_lerp, smootherstep, smoothstep,
-    },
+    util::difficulty::{milliseconds_to_bpm, reverse_lerp, smootherstep, smoothstep},
 };
 
 pub struct SnapAimEvaluator;
@@ -67,9 +65,7 @@ impl SnapAimEvaluator {
                 acute_bonus = Self::calc_angle_acuteness(curr_angle);
                 acute_bonus *= 0.08
                     + 0.92
-                        * (1.0
-                            - acute_bonus
-                                .min(Self::calc_angle_acuteness(last_angle).powi(3)));
+                        * (1.0 - acute_bonus.min(Self::calc_angle_acuteness(last_angle).powi(3)));
                 acute_bonus *= vel_influence
                     * smootherstep(
                         milliseconds_to_bpm(curr.adjusted_delta_time, Some(2)),
@@ -80,13 +76,12 @@ impl SnapAimEvaluator {
             }
 
             let mut wide_bonus = Self::calc_angle_wideness(curr_angle);
-            wide_bonus *= 0.25
-                + 0.75
-                    * (1.0
-                        - wide_bonus.min(Self::calc_angle_wideness(last_angle).powi(3)));
+            wide_bonus *=
+                0.25 + 0.75 * (1.0 - wide_bonus.min(Self::calc_angle_wideness(last_angle).powi(3)));
 
             const WIDE_ANGLE_TIME_SCALE: f64 = 1.45;
-            let mut wide_curr_vel = curr_dist / curr.adjusted_delta_time.powf(WIDE_ANGLE_TIME_SCALE);
+            let mut wide_curr_vel =
+                curr_dist / curr.adjusted_delta_time.powf(WIDE_ANGLE_TIME_SCALE);
             let wide_prev_vel = prev_dist / last.adjusted_delta_time.powf(WIDE_ANGLE_TIME_SCALE);
 
             if last.base.is_slider() && with_slider_travel_dist {
@@ -185,8 +180,7 @@ impl SnapAimEvaluator {
                 .zip(curr.normalised_vector_angle)
             {
                 let angle_diff = (curr_vector - prev_vector).abs();
-                constant_angle_count +=
-                    (8.0 * 11.25_f64.to_radians().min(angle_diff)).cos();
+                constant_angle_count += (8.0 * 11.25_f64.to_radians().min(angle_diff)).cos();
             }
         }
 
@@ -196,11 +190,12 @@ impl SnapAimEvaluator {
             0.0,
             f64::from(OsuDifficultyObject::NORMALIZED_DIAMETER),
         );
-        let angle_diff_adjusted =
-            (2.0 * 45_f64.to_radians().min((curr_angle - last_angle).abs() * stack_factor))
-                .cos();
-        let base_nerf =
-            1.0 - 0.15 * Self::calc_angle_acuteness(last_angle) * angle_diff_adjusted;
+        let angle_diff_adjusted = (2.0
+            * 45_f64
+                .to_radians()
+                .min((curr_angle - last_angle).abs() * stack_factor))
+        .cos();
+        let base_nerf = 1.0 - 0.15 * Self::calc_angle_acuteness(last_angle) * angle_diff_adjusted;
 
         (base_nerf + (1.0 - base_nerf) * vector_repetition * 0.5 * stack_factor).powi(2)
     }
@@ -299,15 +294,13 @@ impl FlowAimEvaluator {
 
         if let Some((curr_angle, last_angle)) = curr.angle.zip(last.angle) {
             let angle_diff = (curr_angle - last_angle).abs();
-            let angular_vel = (angle_diff / 2.0).sin() * 180.0
-                / (curr.adjusted_delta_time * 0.1);
+            let angular_vel = (angle_diff / 2.0).sin() * 180.0 / (curr.adjusted_delta_time * 0.1);
             difficulty *= 0.8 + (angular_vel / 270.0).sqrt();
         }
 
         if let Some(curr_angle) = curr.angle {
-            difficulty += curr_vel
-                * SnapAimEvaluator::calc_angle_acuteness(curr_angle)
-                * overlap_weight;
+            difficulty +=
+                curr_vel * SnapAimEvaluator::calc_angle_acuteness(curr_angle) * overlap_weight;
         }
 
         if prev_vel.max(curr_vel) != 0.0 {
@@ -320,10 +313,9 @@ impl FlowAimEvaluator {
                 0.0,
                 1.0,
             );
-            let overlap_vel_buff =
-                (f64::from(OsuDifficultyObject::NORMALIZED_DIAMETER) * 1.25
-                    / curr.adjusted_delta_time.min(last.adjusted_delta_time))
-                .min((prev_vel - curr_vel).abs());
+            let overlap_vel_buff = (f64::from(OsuDifficultyObject::NORMALIZED_DIAMETER) * 1.25
+                / curr.adjusted_delta_time.min(last.adjusted_delta_time))
+            .min((prev_vel - curr_vel).abs());
             difficulty += overlap_vel_buff * dist_ratio * overlap_weight * 0.52;
         }
 

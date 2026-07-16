@@ -31,11 +31,7 @@ impl Reading {
         }
     }
 
-    pub fn process(
-        &mut self,
-        curr: &OsuDifficultyObject<'_>,
-        objects: &[OsuDifficultyObject<'_>],
-    ) {
+    pub fn process(&mut self, curr: &OsuDifficultyObject<'_>, objects: &[OsuDifficultyObject<'_>]) {
         self.object_start_times.push(curr.start_time);
         let decay = 0.8_f64.powf(curr.delta_time / 1000.0);
         self.current_strain *= decay;
@@ -81,11 +77,7 @@ impl Reading {
             .take_while(|&&time| time <= first + 60_000.0)
             .count();
 
-        for (idx, difficulty) in difficulties
-            .iter_mut()
-            .take(reduced_note_count)
-            .enumerate()
-        {
+        for (idx, difficulty) in difficulties.iter_mut().take(reduced_note_count).enumerate() {
             let scale = (1.0 + 9.0 * idx as f64 / reduced_note_count as f64)
                 .clamp(1.0, 10.0)
                 .log10();

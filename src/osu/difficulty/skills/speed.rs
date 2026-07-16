@@ -28,11 +28,7 @@ impl Speed {
         }
     }
 
-    pub fn process(
-        &mut self,
-        curr: &OsuDifficultyObject<'_>,
-        objects: &[OsuDifficultyObject<'_>],
-    ) {
+    pub fn process(&mut self, curr: &OsuDifficultyObject<'_>, objects: &[OsuDifficultyObject<'_>]) {
         if self.has_relax {
             self.object_difficulties.push(0.0);
 
@@ -49,8 +45,8 @@ impl Speed {
         }
 
         self.current_strain += adjusted * (1.0 - decay) * 1.16;
-        let total_strain = self.current_strain
-            * RhythmEvaluator::evaluate_diff_of(curr, objects, self.hit_window);
+        let total_strain =
+            self.current_strain * RhythmEvaluator::evaluate_diff_of(curr, objects, self.hit_window);
 
         if curr.base.is_slider() {
             self.slider_strains.push(total_strain);
@@ -90,11 +86,7 @@ impl Speed {
         self.count_weighted(&self.object_difficulties, difficulty_value, weight_sum)
     }
 
-    pub fn count_top_weighted_sliders(
-        &self,
-        difficulty_value: f64,
-        weight_sum: f64,
-    ) -> f64 {
+    pub fn count_top_weighted_sliders(&self, difficulty_value: f64, weight_sum: f64) -> f64 {
         self.count_weighted(&self.slider_strains, difficulty_value, weight_sum)
     }
 

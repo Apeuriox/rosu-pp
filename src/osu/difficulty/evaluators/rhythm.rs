@@ -69,8 +69,8 @@ impl RhythmEvaluator {
                 Self::effective_difficulty(ratio) * window_penalty * difference_multiplier;
 
             if prev_obj.base.is_slider() {
-                let lazy_ratio = curr_obj.min_jump_time.max(curr_delta)
-                    / curr_obj.min_jump_time.min(curr_delta);
+                let lazy_ratio =
+                    curr_obj.min_jump_time.max(curr_delta) / curr_obj.min_jump_time.min(curr_delta);
                 let real_ratio = curr_obj.last_object_end_delta_time.max(curr_delta)
                     / curr_obj.last_object_end_delta_time.min(curr_delta);
                 effective = effective.min(
@@ -115,12 +115,7 @@ impl RhythmEvaluator {
                             existing.occurrences += 1;
                         }
 
-                        let power = logistic(
-                            f64::from(island.delta),
-                            58.33,
-                            0.24,
-                            Some(2.75),
-                        );
+                        let power = logistic(f64::from(island.delta), 58.33, 0.24, Some(2.75));
                         effective *= (3.0 / existing.occurrences as f64)
                             .min((existing.occurrences as f64).recip().powf(power));
                     } else if island.delta_count > 0 {

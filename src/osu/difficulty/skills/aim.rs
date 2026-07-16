@@ -68,11 +68,7 @@ impl Aim {
         }
     }
 
-    pub fn process(
-        &mut self,
-        curr: &OsuDifficultyObject<'_>,
-        objects: &[OsuDifficultyObject<'_>],
-    ) {
+    pub fn process(&mut self, curr: &OsuDifficultyObject<'_>, objects: &[OsuDifficultyObject<'_>]) {
         if curr.idx == 0 {
             self.current_section_begin = curr.start_time;
             self.current_section_end = self.current_section_begin + Self::MAX_SECTION_LEN;
@@ -150,9 +146,11 @@ impl Aim {
         curr: &OsuDifficultyObject<'_>,
         objects: &[OsuDifficultyObject<'_>],
     ) {
-        let prev_start_time = curr.previous(0, objects).map_or(0.0, |prev| prev.start_time);
-        self.current_section_peak = self.current_strain
-            * 0.2_f64.powf((time - prev_start_time) / 1000.0);
+        let prev_start_time = curr
+            .previous(0, objects)
+            .map_or(0.0, |prev| prev.start_time);
+        self.current_section_peak =
+            self.current_strain * 0.2_f64.powf((time - prev_start_time) / 1000.0);
     }
 
     fn strain_value_at(
@@ -239,8 +237,7 @@ impl Aim {
 
             while added_time < strain.section_len {
                 let scale = (1.0
-                    + 9.0
-                        * ((time + added_time) / Self::REDUCED_SECTION_TIME).clamp(0.0, 1.0))
+                    + 9.0 * ((time + added_time) / Self::REDUCED_SECTION_TIME).clamp(0.0, 1.0))
                 .log10();
                 strains.push(StrainPeak::new(
                     strain.value
@@ -268,8 +265,7 @@ impl Aim {
         for strain in self.reduced_strain_peaks() {
             let start_time = time;
             let end_time = time + strain.section_len / Self::MAX_SECTION_LEN;
-            let weight = Self::DECAY_WEIGHT.powf(start_time)
-                - Self::DECAY_WEIGHT.powf(end_time);
+            let weight = Self::DECAY_WEIGHT.powf(start_time) - Self::DECAY_WEIGHT.powf(end_time);
             difficulty += strain.value * weight;
             time = end_time;
         }

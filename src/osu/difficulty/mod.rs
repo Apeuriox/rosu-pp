@@ -5,10 +5,7 @@ use skills::flashlight::Flashlight;
 
 use crate::{
     Beatmap,
-    any::{
-        CalculateError,
-        difficulty::Difficulty,
-    },
+    any::{CalculateError, difficulty::Difficulty},
     model::{beatmap::BeatmapAttributes, mode::ConvertError, mods::GameMods},
     osu::{
         convert::{convert_objects, prepare_map},
@@ -111,7 +108,8 @@ impl OsuDifficultySetup {
             ..Default::default()
         };
 
-        let time_preempt = f64::from((hit_windows.ar.unwrap_or(0.0) * clock_rate) as f32);
+        // Top-level lazer hitobjects use DifficultyRangeInt for TimePreempt.
+        let time_preempt = (hit_windows.ar.unwrap_or(0.0) * clock_rate).trunc();
 
         Self {
             scaling_factor,
@@ -219,13 +217,11 @@ impl DifficultyValues {
         let (speed_difficulty_value, speed_weight_sum) = speed.difficulty_value();
         let speed_top_weighted_slider_count =
             speed.count_top_weighted_sliders(speed_difficulty_value, speed_weight_sum);
-        let speed_difficult_strain_count = speed
-            .count_top_weighted_object_difficulties(speed_difficulty_value, speed_weight_sum);
+        let speed_difficult_strain_count =
+            speed.count_top_weighted_object_difficulties(speed_difficulty_value, speed_weight_sum);
         let (reading_difficulty_value, reading_weight_sum) = reading.difficulty_value();
-        let reading_difficult_note_count = reading.count_top_weighted_object_difficulties(
-            reading_difficulty_value,
-            reading_weight_sum,
-        );
+        let reading_difficult_note_count = reading
+            .count_top_weighted_object_difficulties(reading_difficulty_value, reading_weight_sum);
 
         let speed_top_weighted_slider_factor = speed_top_weighted_slider_count
             / (speed_difficult_strain_count - speed_top_weighted_slider_count).max(1.0);
@@ -336,7 +332,10 @@ pub(crate) fn sum_cognition_difficulty(reading: f64, flashlight: f64) -> f64 {
 
     crate::util::difficulty::norm(
         PERFORMANCE_NORM_EXPONENT,
-        [reading, flashlight * (flashlight / reading).clamp(0.25, 1.0)],
+        [
+            reading,
+            flashlight * (flashlight / reading).clamp(0.25, 1.0),
+        ],
     )
 }
 

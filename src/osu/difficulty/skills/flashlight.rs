@@ -75,9 +75,12 @@ impl Flashlight {
         }
 
         self.current_strain *= strain_decay(curr.delta_time, Self::STRAIN_DECAY_BASE);
-        let mut difficulty = self
-            .evaluator
-            .evaluate_diff_of(curr, objects, self.hidden_objects, self.has_hidden_mod);
+        let mut difficulty = self.evaluator.evaluate_diff_of(
+            curr,
+            objects,
+            self.hidden_objects,
+            self.has_hidden_mod,
+        );
 
         if self.has_touch_device {
             difficulty = difficulty.powf(0.9);

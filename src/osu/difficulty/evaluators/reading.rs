@@ -10,8 +10,7 @@ pub struct ReadingEvaluator;
 
 impl ReadingEvaluator {
     const WINDOW_SIZE: f64 = 3000.0;
-    const DIST_INFLUENCE_THRESHOLD: f64 =
-        OsuDifficultyObject::NORMALIZED_DIAMETER as f64 * 1.5;
+    const DIST_INFLUENCE_THRESHOLD: f64 = OsuDifficultyObject::NORMALIZED_DIAMETER as f64 * 1.5;
 
     pub fn evaluate_diff_of<'a>(
         curr: &'a OsuDifficultyObject<'a>,
@@ -26,20 +25,17 @@ impl ReadingEvaluator {
         let visible_density = Self::current_visible_object_density(curr, objects);
         let past_influence = Self::past_object_difficulty_influence(curr, objects);
         let angle_nerf = Self::constant_angle_nerf_factor(curr, objects);
-        let future_influence = curr.next(0, objects).map_or(visible_density.sqrt(), |next| {
-            visible_density.sqrt()
-                * smootherstep(
-                    next.lazy_jump_dist,
-                    15.0,
-                    Self::DIST_INFLUENCE_THRESHOLD,
-                )
-        });
+        let future_influence = curr
+            .next(0, objects)
+            .map_or(visible_density.sqrt(), |next| {
+                visible_density.sqrt()
+                    * smootherstep(next.lazy_jump_dist, 15.0, Self::DIST_INFLUENCE_THRESHOLD)
+            });
         let density_base =
             (past_influence + future_influence).powf(1.7) * 0.4 * angle_nerf * velocity;
         let density = (density_base - 2.5).max(0.0).powf(0.45) * 2.4;
-        let preempt_base = ((500.0 - curr.preempt + (curr.preempt - 500.0).abs()) / 2.0)
-            .powf(2.5)
-            / 140_000.0;
+        let preempt_base =
+            ((500.0 - curr.preempt + (curr.preempt - 500.0).abs()) / 2.0).powf(2.5) / 140_000.0;
         let preempt = preempt_base * angle_nerf * velocity;
         let hidden = if hidden {
             Self::hidden_difficulty(
@@ -69,8 +65,7 @@ impl ReadingEvaluator {
         let preempt_factor = curr.preempt.powf(2.2) * 0.01;
         let density_factor = (visible_density + past_influence).powf(3.3) * 3.0;
         let mut difficulty =
-            ((preempt_factor + density_factor) * angle_nerf * velocity * 0.01).powf(0.4)
-                * 0.28;
+            ((preempt_factor + density_factor) * angle_nerf * velocity * 0.01).powf(0.4) * 0.28;
 
         if let Some(previous) = curr.previous(0, objects) {
             if curr.lazy_jump_dist == 0.0
@@ -158,21 +153,16 @@ impl ReadingEvaluator {
                 let angle_diff = (curr_angle - loop_angle).abs();
                 let mut alternating_diff = PI;
 
-                if let (Some(prev0_angle), Some(prev1_angle), Some(prev2_angle)) =
-                    (prev0.angle, prev1.and_then(|obj| obj.angle), prev2.and_then(|obj| obj.angle))
-                {
-                    alternating_diff = (prev1_angle - loop_angle).abs()
-                        + (prev2_angle - prev0_angle).abs();
-                    let mut weight = reverse_lerp(
-                        loop_angle.min(prev0_angle).to_degrees(),
-                        20.0,
-                        5.0,
-                    );
-                    weight *= reverse_lerp(
-                        loop_angle.max(prev0_angle).to_degrees(),
-                        60.0,
-                        120.0,
-                    );
+                if let (Some(prev0_angle), Some(prev1_angle), Some(prev2_angle)) = (
+                    prev0.angle,
+                    prev1.and_then(|obj| obj.angle),
+                    prev2.and_then(|obj| obj.angle),
+                ) {
+                    alternating_diff =
+                        (prev1_angle - loop_angle).abs() + (prev2_angle - prev0_angle).abs();
+                    let mut weight =
+                        reverse_lerp(loop_angle.min(prev0_angle).to_degrees(), 20.0, 5.0);
+                    weight *= reverse_lerp(loop_angle.max(prev0_angle).to_degrees(), 60.0, 120.0);
                     alternating_diff = PI + (0.1 * alternating_diff - PI) * weight;
                 }
 

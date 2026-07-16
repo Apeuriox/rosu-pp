@@ -49,6 +49,35 @@ impl MovementEvaluator {
                 / sqrt_strain;
         }
 
+        // * Nerf sustained linear movement with consistent spacing.
+        let mut linear_spacing_count = 0;
+
+        for idx in 0..curr.idx.min(10) {
+            let Some(previous) = curr.previous(idx, diff_objects) else {
+                break;
+            };
+
+            if curr.dist_moved.signum() != previous.dist_moved.signum()
+                || curr.dist_moved == 0.0
+                || previous.dist_moved == 0.0
+            {
+                break;
+            }
+
+            let current_spacing = (f64::from(curr.dist_moved) / curr.strain_time).abs();
+            let previous_spacing =
+                (f64::from(previous.dist_moved) / previous.strain_time).abs();
+            let relative_diff = (current_spacing / previous_spacing - 1.0).abs();
+
+            if relative_diff > 0.05 {
+                break;
+            }
+
+            linear_spacing_count += 1;
+        }
+
+        dist_addition *= 0.7_f64.powi(linear_spacing_count);
+
         // * Bonus for edge dashes.
         if curr.last_object.dist_to_hyper_dash <= 20.0 {
             if !curr.last_object.hyper_dash {
