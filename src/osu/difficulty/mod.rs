@@ -26,7 +26,6 @@ use super::attributes::OsuDifficultyAttributes;
 mod evaluators;
 pub mod gradual;
 mod object;
-pub mod rating;
 pub mod scaling_factor;
 pub mod skills;
 

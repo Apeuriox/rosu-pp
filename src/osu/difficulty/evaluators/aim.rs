@@ -54,7 +54,7 @@ impl SnapAimEvaluator {
         } else {
             last.jump_dist
         };
-        let mut prev_vel = prev_dist / last.adjusted_delta_time;
+        let prev_vel = prev_dist / last.adjusted_delta_time;
         let mut difficulty = curr_vel * Self::vector_angle_repetition(curr, last, objects);
 
         if let Some((curr_angle, last_angle)) = curr.angle.zip(last.angle) {

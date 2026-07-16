@@ -10,7 +10,6 @@ pub mod aim;
 pub mod flashlight;
 pub mod reading;
 pub mod speed;
-pub mod strain;
 
 pub struct OsuSkills {
     pub aim: Aim,
