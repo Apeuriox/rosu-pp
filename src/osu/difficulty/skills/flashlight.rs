@@ -42,7 +42,7 @@ define_skill! {
             has_autopilot: mods.ap(),
             magnetised_strength: mods.attraction_strength(),
             deflate_start_scale: mods.deflate_start_scale(),
-            total_objects,
+            total_objects: total_objects,
             evaluator: FlashlightEvaluator::new(scaling_factor, time_preempt, time_fade_in),
         }
     }
