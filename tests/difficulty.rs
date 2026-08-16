@@ -83,6 +83,7 @@ macro_rules! test_cases {
             n_spinners: $n_spinners,
             stars: $stars,
             max_combo: $max_combo,
+            ..Default::default()
         }
     };
     ( @Taiko {
@@ -395,44 +396,44 @@ fn convert_taiko() {
     test_cases! {
         Taiko: OSU {
             NM => {
-                stamina: 2.207066240409116,
-                rhythm: 0.8365139147559882,
-                color: 0.8396618490452487,
-                reading: 1.0735173315689464,
+                stamina: 2.2228533914222286,
+                rhythm: 0.6028550725402863,
+                color: 0.8456679526084883,
+                reading: 1.0811962040551348,
                 great_hit_window: 22.5,
                 ok_hit_window: 56.5,
                 mono_stamina_factor: 0.0014311041774359666,
-                mechanical_difficulty: 3.0467280894543647,
-                consistency_factor: 0.6655548318078143,
-                stars: 4.9567593357792985,
+                mechanical_difficulty: 3.068521344030717,
+                consistency_factor: 0.6875624057993176,
+                stars: 4.752572620626138,
                 max_combo: 908,
                 is_convert: true,
             };
             HR => {
-                stamina: 2.2682938123290377,
-                rhythm: 0.8719256263669988,
-                color: 0.8629554209868424,
-                reading: 1.4197363916621928,
+                stamina: 2.3106156684479586,
+                rhythm: 0.640061492397074,
+                color: 0.8790564547089896,
+                reading: 1.4462258521404312,
                 great_hit_window: 19.5,
                 ok_hit_window: 49.5,
                 mono_stamina_factor: 0.0014311041774359666,
-                mechanical_difficulty: 3.13124923331588,
-                consistency_factor: 0.6679579465054277,
-                stars: 5.422911251345071,
+                mechanical_difficulty: 3.1896721231569485,
+                consistency_factor: 0.679047690894666,
+                stars: 5.275959467694453,
                 max_combo: 908,
                 is_convert: true,
             };
             DT => {
-                stamina: 3.210799549552373,
-                rhythm: 1.2585331678081546,
-                color: 1.0837796585509605,
-                reading: 1.7833409886818568,
+                stamina: 3.252902032191341,
+                rhythm: 0.9584853559461861,
+                color: 1.0979910141819806,
+                reading: 1.8067255325802154,
                 great_hit_window: 15.0,
                 ok_hit_window: 37.666666666666664,
                 mono_stamina_factor: 0.0014418086037955797,
-                mechanical_difficulty: 4.294579208103333,
-                consistency_factor: 0.6621583643602745,
-                stars: 7.336453364593345,
+                mechanical_difficulty: 4.350893046373321,
+                consistency_factor: 0.6748291725050156,
+                stars: 7.116103934899722,
                 max_combo: 908,
                 is_convert: true,
             };
@@ -445,7 +446,7 @@ fn basic_catch() {
     test_cases! {
         Catch: CATCH {
             NM => {
-                stars: 3.250266313373984,
+                stars: 3.2340182503279706,
                 preempt: 750.0,
                 n_fruits: 728,
                 n_droplets: 2,
@@ -453,7 +454,7 @@ fn basic_catch() {
                 is_convert: false,
             };
             HR => {
-                stars: 4.313360856186517,
+                stars: 4.308291009137178,
                 preempt: 450.0,
                 n_fruits: 728,
                 n_droplets: 2,
@@ -461,7 +462,7 @@ fn basic_catch() {
                 is_convert: false,
             };
             EZ => {
-                stars: 4.06522224010957,
+                stars: 4.059198145823293,
                 preempt: 1320.0,
                 n_fruits: 728,
                 n_droplets: 2,
@@ -469,7 +470,7 @@ fn basic_catch() {
                 is_convert: false,
             };
             DT => {
-                stars: 4.635262826575386,
+                stars: 4.6192881825873275,
                 preempt: 500.0,
                 n_fruits: 728,
                 n_droplets: 2,
@@ -485,7 +486,7 @@ fn convert_catch() {
     test_cases! {
         Catch: OSU {
             NM => {
-                stars: 4.528720977989276,
+                stars: 4.526991300645072,
                 preempt: 554.9999713897705,
                 n_fruits: 908,
                 n_droplets: 0,
@@ -493,7 +494,7 @@ fn convert_catch() {
                 is_convert: true,
             };
             HR => {
-                stars: 5.076698043567007,
+                stars: 5.0738627744810545,
                 preempt: 450.0,
                 n_fruits: 908,
                 n_droplets: 0,
@@ -501,7 +502,7 @@ fn convert_catch() {
                 is_convert: true,
             };
             EZ => {
-                stars: 3.593264064535228,
+                stars: 3.590187752268528,
                 preempt: 1241.9999885559082,
                 n_fruits: 908,
                 n_droplets: 0,
@@ -509,7 +510,7 @@ fn convert_catch() {
                 is_convert: true,
             };
             DT => {
-                stars: 6.15540143757313,
+                stars: 6.151552522578919,
                 preempt: 369.9999809265137,
                 n_fruits: 908,
                 n_droplets: 0,
@@ -601,6 +602,7 @@ impl AssertEq for OsuDifficultyAttributes {
             n_spinners,
             stars,
             max_combo,
+            ..
         } = self;
 
         assert_eq_float(*aim, expected.aim);

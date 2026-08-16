@@ -5,6 +5,7 @@ use rosu_map::util::Pos;
 use crate::{
     any::difficulty::object::{HasStartTime, IDifficultyObject},
     osu::object::{OsuObject, OsuObjectKind},
+    util::difficulty::reverse_lerp,
 };
 
 use super::{HD_FADE_OUT_DURATION_MULTIPLIER, scaling_factor::ScalingFactor};
@@ -16,6 +17,10 @@ pub struct OsuDifficultyObject<'a> {
     pub delta_time: f64,
 
     pub adjusted_delta_time: f64,
+    pub last_object_end_delta_time: f64,
+    pub preempt: f64,
+    pub clock_rate: f64,
+    pub jump_dist: f64,
     pub lazy_jump_dist: f64,
     pub min_jump_dist: f64,
     pub min_jump_time: f64,
@@ -25,8 +30,11 @@ pub struct OsuDifficultyObject<'a> {
     pub lazy_travel_dist: f64,
     pub lazy_travel_time: f64,
     pub angle: Option<f64>,
+    pub normalised_vector_angle: Option<f64>,
 
+    pub radius: f64,
     pub small_circle_bonus: f64,
+    pub overall_difficulty: f64,
 }
 
 impl<'a> OsuDifficultyObject<'a> {
@@ -45,12 +53,17 @@ impl<'a> OsuDifficultyObject<'a> {
         clock_rate: f64,
         idx: usize,
         scaling_factor: &ScalingFactor,
+        preempt: f64,
+        hit_window_great: f64,
     ) -> Self {
         let delta_time = (hit_object.start_time - last_object.start_time) / clock_rate;
         let start_time = hit_object.start_time / clock_rate;
 
         let strain_time = delta_time.max(Self::MIN_DELTA_TIME);
-        let small_circle_bonus = (1.0 + (30.0 - scaling_factor.radius) / 40.0).max(1.0);
+        let small_circle_bonus = (1.0 + (30.0 - scaling_factor.radius) / 70.0).max(1.0);
+        let last_object_end_delta_time = last_diff_obj.map_or(strain_time, |last| {
+            (start_time - last.base.end_time() / clock_rate).max(Self::MIN_DELTA_TIME)
+        });
 
         let mut this = Self {
             idx,
@@ -58,6 +71,10 @@ impl<'a> OsuDifficultyObject<'a> {
             start_time,
             delta_time,
             adjusted_delta_time: strain_time,
+            last_object_end_delta_time,
+            preempt,
+            clock_rate,
+            jump_dist: 0.0,
             lazy_jump_dist: 0.0,
             min_jump_dist: 0.0,
             min_jump_time: 0.0,
@@ -67,7 +84,10 @@ impl<'a> OsuDifficultyObject<'a> {
             lazy_travel_dist: 0.0,
             lazy_travel_time: 0.0,
             angle: None,
+            normalised_vector_angle: None,
+            radius: scaling_factor.radius,
             small_circle_bonus,
+            overall_difficulty: (79.5 - hit_window_great / 2.0) / 6.0,
         };
 
         this.compute_slider_cursor_pos(scaling_factor.radius);
@@ -105,7 +125,7 @@ impl<'a> OsuDifficultyObject<'a> {
         }
     }
 
-    pub fn get_doubletapness(&self, next: Option<&Self>, hit_window: f64) -> f64 {
+    pub fn doubletap_feasibility(&self, next: Option<&Self>, hit_window: f64) -> f64 {
         let Some(next) = next else { return 0.0 };
 
         let hit_window = if self.base.is_spinner() {
@@ -118,9 +138,15 @@ impl<'a> OsuDifficultyObject<'a> {
         let next_delta_time = next.delta_time.max(1.0);
         let delta_diff = (next_delta_time - curr_delta_time).abs();
         let speed_ratio = curr_delta_time / curr_delta_time.max(delta_diff);
-        let window_ratio = (curr_delta_time / hit_window).min(1.0).powf(2.0);
+        let window_ratio = (curr_delta_time / hit_window).min(1.0).powf(5.0);
+        let distance_factor = reverse_lerp(
+            self.lazy_jump_dist,
+            f64::from(Self::NORMALIZED_DIAMETER),
+            f64::from(Self::NORMALIZED_RADIUS),
+        )
+        .powi(2);
 
-        1.0 - (speed_ratio).powf(1.0 - window_ratio)
+        1.0 - speed_ratio.powf(distance_factor * (1.0 - window_ratio))
     }
 
     fn set_distances(
@@ -132,8 +158,8 @@ impl<'a> OsuDifficultyObject<'a> {
         scaling_factor: &ScalingFactor,
     ) {
         if let OsuObjectKind::Slider(ref slider) = self.base.kind {
-            self.travel_dist = self.lazy_travel_dist
-                * ((1.0 + slider.repeat_count() as f64 / 2.5).powf(1.0 / 2.5));
+            self.travel_dist =
+                self.lazy_travel_dist * (slider.repeat_count() as f64).powf(0.3).max(1.0);
 
             self.travel_time =
                 (self.lazy_travel_time / clock_rate).max(OsuDifficultyObject::MIN_DELTA_TIME);
@@ -144,6 +170,10 @@ impl<'a> OsuDifficultyObject<'a> {
         }
 
         let scaling_factor = scaling_factor.factor;
+
+        self.jump_dist = f64::from(
+            (last_object.stacked_pos() - self.base.stacked_pos()).length() * scaling_factor,
+        );
 
         let last_cursor_pos = if let Some(last_diff_obj) = last_diff_obj {
             Self::get_end_cursor_pos(last_diff_obj)
@@ -186,16 +216,91 @@ impl<'a> OsuDifficultyObject<'a> {
         };
 
         if !last_last_diff_obj.base.is_spinner() {
+            let mut angle_center = last_cursor_pos;
+
+            if last_object.is_slider() && last_diff_obj.travel_dist > 0.0 {
+                angle_center = last_object.stacked_pos();
+            }
+
             let last_last_cursor_pos = Self::get_end_cursor_pos(last_last_diff_obj);
+            let movement_angle =
+                Self::calculate_angle(self.base.stacked_pos(), angle_center, last_last_cursor_pos);
+            let slider_angle = Self::calculate_slider_angle(
+                self.base.stacked_pos(),
+                last_diff_obj,
+                last_last_cursor_pos,
+            );
 
-            let v1 = last_last_cursor_pos - last_object.stacked_pos();
-            let v2 = self.base.stacked_pos() - last_cursor_pos;
-
-            let dot = v1.dot(v2);
-            let det = v1.x * v2.y - v1.y * v2.x;
-
-            self.angle = Some((f64::from(det).atan2(f64::from(dot))).abs());
+            let vector = self.base.stacked_pos() - angle_center;
+            self.normalised_vector_angle =
+                Some(f64::from(vector.y.abs()).atan2(f64::from(vector.x.abs())));
+            self.angle = Some(movement_angle.min(slider_angle));
         }
+    }
+
+    pub fn opacity_at_adjusted(&self, time: f64, hidden: bool) -> f64 {
+        if time > self.start_time {
+            return 0.0;
+        }
+
+        let fade_in_start = self.start_time - self.preempt;
+        let raw_preempt = self.preempt * self.clock_rate;
+        let fade_in_duration = 400.0
+            * (raw_preempt / crate::osu::object::OsuObject::PREEMPT_MIN).min(1.0)
+            / self.clock_rate;
+
+        if hidden {
+            let hidden_fade_in_duration = if self.base.is_slider() {
+                fade_in_duration
+            } else {
+                self.preempt * super::HD_FADE_IN_DURATION_MULTIPLIER
+            };
+            let fade_out_start = fade_in_start + hidden_fade_in_duration;
+            let fade_out_duration = self.preempt * super::HD_FADE_OUT_DURATION_MULTIPLIER;
+
+            ((time - fade_in_start) / fade_in_duration)
+                .clamp(0.0, 1.0)
+                .min(1.0 - ((time - fade_out_start) / fade_out_duration).clamp(0.0, 1.0))
+        } else {
+            ((time - fade_in_start) / fade_in_duration).clamp(0.0, 1.0)
+        }
+    }
+
+    fn calculate_slider_angle(
+        current_pos: Pos,
+        last_diff_obj: &OsuDifficultyObject<'_>,
+        mut last_last_cursor_pos: Pos,
+    ) -> f64 {
+        let last_cursor_pos = Self::get_end_cursor_pos(last_diff_obj);
+
+        if last_diff_obj.travel_dist > 0.0 {
+            if let OsuObjectKind::Slider(slider) = &last_diff_obj.base.kind {
+                // rosu's nested objects exclude slider heads, unlike lazer's NestedHitObjects.
+                last_last_cursor_pos = if let Some(second_last_nested_idx) =
+                    slider.nested_objects.len().checked_sub(2)
+                {
+                    slider
+                        .nested_objects
+                        .get(second_last_nested_idx)
+                        .map_or(last_diff_obj.base.stacked_pos(), |nested| {
+                            nested.pos + last_diff_obj.base.stack_offset
+                        })
+                } else {
+                    last_diff_obj.base.stacked_pos()
+                };
+            }
+        }
+
+        Self::calculate_angle(current_pos, last_cursor_pos, last_last_cursor_pos)
+    }
+
+    fn calculate_angle(current_pos: Pos, last_pos: Pos, last_last_pos: Pos) -> f64 {
+        let v1 = last_last_pos - last_pos;
+        let v2 = current_pos - last_pos;
+        let dot = v1.dot(v2);
+        let det = v1.x * v2.y - v1.y * v2.x;
+
+        f64::from(det).atan2(f64::from(dot)).abs()
     }
 
     pub fn compute_slider_cursor_pos(&mut self, radius: f64) {

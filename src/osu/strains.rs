@@ -14,14 +14,20 @@ pub struct OsuStrains {
     pub aim: Vec<f64>,
     /// Strain peaks of the aim skill without sliders.
     pub aim_no_sliders: Vec<f64>,
-    /// Strain peaks of the speed skill.
+    /// Per-object strains of the speed skill.
     pub speed: Vec<f64>,
+    /// Object strains of the reading skill.
+    pub reading: Vec<f64>,
     /// Strain peaks of the flashlight skill.
     pub flashlight: Vec<f64>,
 }
 
 impl OsuStrains {
-    /// Time between two strains in ms.
+    /// Time between two section-based strains in ms.
+    ///
+    /// This applies to [`Self::aim`], [`Self::aim_no_sliders`], and
+    /// [`Self::flashlight`]. Speed and reading contain one entry per
+    /// difficulty object because they use harmonic aggregation.
     pub const SECTION_LEN: f64 = 400.0;
 }
 
@@ -36,6 +42,7 @@ pub fn strains(difficulty: &Difficulty, map: &Beatmap) -> Result<OsuStrains, Con
                 aim_no_sliders,
                 speed,
                 flashlight,
+                reading,
             },
         attrs: _,
     } = DifficultyValues::calculate(difficulty, &map);
@@ -43,7 +50,8 @@ pub fn strains(difficulty: &Difficulty, map: &Beatmap) -> Result<OsuStrains, Con
     Ok(OsuStrains {
         aim: aim.into_current_strain_peaks(),
         aim_no_sliders: aim_no_sliders.into_current_strain_peaks(),
-        speed: speed.into_current_strain_peaks(),
+        speed: speed.into_object_difficulties(),
+        reading: reading.into_object_difficulties(),
         flashlight: flashlight.into_current_strain_peaks(),
     })
 }

@@ -10,6 +10,9 @@ documentation = "https://docs.rs/rosu-pp/"
 description = "Difficulty and performance calculation for osu!"
 keywords = ["osu", "pp", "stars", "performance", "difficulty"]
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [features]
 default = []
 sync = []

@@ -1,0 +1,158 @@
+name: osu!standard 202607 validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - pp-rework-202607
+    paths:
+      - ".github/workflows/osu-standard-202607.yml"
+      - "src/osu/**"
+      - "tests/difficulty.rs"
+      - "tests/performance.rs"
+      - "resources/**"
+      - "Cargo.toml"
+  pull_request:
+    paths:
+      - ".github/workflows/osu-standard-202607.yml"
+      - "src/osu/**"
+      - "tests/difficulty.rs"
+      - "tests/performance.rs"
+      - "resources/**"
+      - "Cargo.toml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: osu-standard-202607-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            artifact: rosu-pp-linux-x86_64-release
+          - os: windows-latest
+            artifact: rosu-pp-windows-x86_64-release
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check all targets
+        run: cargo check --all-targets --no-default-features
+
+      - name: Build release shared library
+        run: cargo build --release --no-default-features
+
+      - name: Verify Linux GLIBC requirement
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          ldd --version | head -n 1
+          max_glibc="$(objdump -T target/release/librosu_pp.so \
+            | sed -n 's/.*GLIBC_\([0-9][0-9.]*\).*/\1/p' \
+            | sort -V \
+            | tail -n 1)"
+          echo "Highest required GLIBC symbol version: ${max_glibc:-none}"
+          if [ -n "$max_glibc" ] && dpkg --compare-versions "$max_glibc" gt "2.38"; then
+            echo "librosu_pp.so requires GLIBC $max_glibc, which exceeds 2.38"
+            exit 1
+          fi
+
+      - name: Upload release shared library
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            target/release/librosu_pp.so
+            target/release/rosu_pp.dll
+            target/release/rosu_pp.dll.lib
+            target/release/rosu_pp.pdb
+          if-no-files-found: error
+          retention-days: 30
+
+  gradual-consistency:
+    name: Gradual consistency (${{ matrix.os }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-22.04
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # These compare repeated timed queries with one-shot calculations. They
+      # are the primary regression checks for HarmonicSkill state pollution.
+      - name: Test gradual difficulty consistency
+        run: >
+          cargo test --no-default-features --lib
+          osu::difficulty::gradual::tests::next_and_nth
+          -- --exact --nocapture
+
+      - name: Test gradual performance consistency
+        run: >
+          cargo test --no-default-features --lib
+          osu::performance::gradual::tests::next_and_nth
+          -- --exact --nocapture
+
+  osu-regression:
+    name: Legacy value comparison (${{ matrix.os }})
+    needs: build
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-22.04
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test osu! difficulty values
+        continue-on-error: true
+        run: >
+          cargo test --no-default-features --test difficulty
+          basic_osu -- --exact --nocapture
+
+      - name: Test osu! performance values
+        continue-on-error: true
+        run: >
+          cargo test --no-default-features --test performance
+          basic_osu -- --exact --nocapture

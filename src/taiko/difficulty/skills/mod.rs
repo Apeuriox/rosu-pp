@@ -19,7 +19,8 @@ pub struct TaikoSkills {
 impl TaikoSkills {
     pub fn new(great_hit_window: f64, is_convert: bool) -> Self {
         Self {
-            rhythm: Rhythm::new(great_hit_window),
+            // DifficultyHitObject.HitWindowGreat is the full two-sided window.
+            rhythm: Rhythm::new(great_hit_window * 2.0),
             reading: Reading::new(),
             color: Color::new(),
             stamina: Stamina::new(false, is_convert),
