@@ -10,9 +10,9 @@ use super::difficulty::{DifficultyValues, skills::OsuSkills};
 /// Suitable to plot the difficulty of a map over time.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OsuStrains {
-    /// Strain peaks of the aim skill.
+    /// Per-object strains of the aim skill.
     pub aim: Vec<f64>,
-    /// Strain peaks of the aim skill without sliders.
+    /// Per-object strains of the aim skill without sliders.
     pub aim_no_sliders: Vec<f64>,
     /// Per-object strains of the speed skill.
     pub speed: Vec<f64>,
@@ -25,9 +25,9 @@ pub struct OsuStrains {
 impl OsuStrains {
     /// Time between two section-based strains in ms.
     ///
-    /// This applies to [`Self::aim`], [`Self::aim_no_sliders`], and
-    /// [`Self::flashlight`]. Speed and reading contain one entry per
-    /// difficulty object because they use harmonic aggregation.
+    /// This applies to [`Self::flashlight`]. Aim, aim_no_sliders, speed, and
+    /// reading contain one entry per difficulty object because they use
+    /// harmonic aggregation.
     pub const SECTION_LEN: f64 = 400.0;
 }
 
@@ -48,8 +48,8 @@ pub fn strains(difficulty: &Difficulty, map: &Beatmap) -> Result<OsuStrains, Con
     } = DifficultyValues::calculate(difficulty, &map);
 
     Ok(OsuStrains {
-        aim: aim.into_current_strain_peaks(),
-        aim_no_sliders: aim_no_sliders.into_current_strain_peaks(),
+        aim: aim.into_object_difficulties(),
+        aim_no_sliders: aim_no_sliders.into_object_difficulties(),
         speed: speed.into_object_difficulties(),
         reading: reading.into_object_difficulties(),
         flashlight: flashlight.into_current_strain_peaks(),

@@ -322,10 +322,7 @@ impl Aim {
             .sum()
     }
 
-    pub fn into_current_strain_peaks(self) -> Vec<f64> {
-        self.current_strain_peaks()
-            .into_iter()
-            .map(|peak| peak.value)
-            .collect()
+    pub fn into_object_difficulties(self) -> Vec<f64> {
+        self.object_difficulties
     }
 }
